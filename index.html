@@ -462,24 +462,35 @@
     }
     
     // 로그인 처리
-    function handleLogin() {
+    function handleLogin(event) {
+      if (event) event.preventDefault();
+      
+      // 폼 데이터 가져오기
       const email = document.getElementById('login-email').value;
       const password = document.getElementById('login-password').value;
       
-      // 로그인 버튼 비활성화 및 로딩 표시
-      const loginButton = document.querySelector('#login-form button[type="submit"]');
-      const originalButtonText = loginButton.innerHTML;
-      loginButton.innerHTML = '로그인 중...';
-      loginButton.disabled = true;
+      // 입력값 검증
+      if (!email || !password) {
+        alert('이메일과 비밀번호를 모두 입력해주세요.');
+        return;
+      }
       
       // 구글 스크립트 웹 앱 URL
       const scriptURL = 'https://script.google.com/macros/s/AKfycbxKL-F8PBl_33hQKtgXpOz0CaXMTMoS3W99C0f8PkQjTD7SnnTqOc3L5cYjCtxXHAbY/exec';
       
       // URL 파라미터 생성
       const params = new URLSearchParams();
-      params.append('requestType', 'login');
+      params.append('action', 'login');
       params.append('email', email);
       params.append('password', password);
+      
+      // 로그인 버튼 비활성화
+      const loginButton = document.querySelector('#login-form button[type="submit"]');
+      const originalButtonText = loginButton.innerHTML;
+      loginButton.innerHTML = '처리 중...';
+      loginButton.disabled = true;
+      
+      console.log('로그인 요청 URL:', `${scriptURL}?${params.toString()}`);
       
       // fetch API를 사용하여 데이터 전송
       fetch(`${scriptURL}?${params.toString()}`, {
@@ -490,6 +501,8 @@
         }
       })
       .then(response => {
+        console.log('로그인 응답 상태:', response.status);
+        
         // 버튼 상태 복원
         loginButton.innerHTML = originalButtonText;
         loginButton.disabled = false;
@@ -503,29 +516,21 @@
         console.log('로그인 응답:', data);
         
         if (data.result === 'success') {
-          // 로그인 성공
-          currentUser = {
-            email: data.email,
-            name: data.name,
-            type: data.type,
-            memberNumber: data.memberNumber
-          };
-          
-          // 로컬 스토리지에 저장
-          localStorage.setItem('currentUser', JSON.stringify(currentUser));
-          isLoggedIn = true;
+          // 로그인 성공 시 사용자 정보 저장
+          localStorage.setItem('userEmail', data.member.email);
+          localStorage.setItem('userName', data.member.name || data.member.businessName);
+          localStorage.setItem('userType', data.member.type);
+          localStorage.setItem('memberNumber', data.member.memberNumber);
           
           // UI 업데이트
           updateUIForLoggedInUser();
           
           // 모달 닫기
-          toggleLoginModal();
+          document.getElementById('login-modal').style.display = 'none';
           
-          // 성공 메시지
-          alert('로그인되었습니다.');
+          alert('로그인 되었습니다.');
         } else {
-          // 로그인 실패
-          alert(data.message || '로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.');
+          alert('로그인 중 오류가 발생했습니다: ' + (data.message || '알 수 없는 오류'));
         }
       })
       .catch(error => {
@@ -545,20 +550,33 @@
       
       // URL 파라미터 생성
       const params = new URLSearchParams();
-      params.append('requestType', 'register');
+      params.append('action', 'register');
       params.append('memberType', type);
       
       let registerButton;
+      let email, password;
       
       if (type === 'personal') {
         const name = document.getElementById('personal-name').value;
-        const email = document.getElementById('personal-email').value;
+        email = document.getElementById('personal-email').value;
         const phone = document.getElementById('personal-phone').value;
-        const password = document.getElementById('personal-password').value;
+        password = document.getElementById('personal-password').value;
         const passwordConfirm = document.getElementById('personal-password-confirm').value;
         const postcode = document.getElementById('personal-postcode').value;
         const address = document.getElementById('personal-address').value;
         const addressDetail = document.getElementById('personal-address-detail').value;
+        
+        // 필수 입력값 검증
+        if (!name || !email || !password) {
+          alert('이름, 이메일, 비밀번호는 필수 입력 항목입니다.');
+          return;
+        }
+        
+        // 이메일 형식 검증
+        if (!validateEmail(email)) {
+          alert('유효한 이메일 주소를 입력해주세요.');
+          return;
+        }
         
         // 비밀번호 확인
         if (password !== passwordConfirm) {
@@ -584,12 +602,30 @@
         const businessType = document.getElementById('business-type').value;
         const businessCategory = document.getElementById('business-category').value;
         const businessEmail = document.getElementById('business-email').value;
-        const email = document.getElementById('business-contact-email').value;
-        const password = document.getElementById('business-password').value;
+        email = document.getElementById('business-contact-email').value;
+        password = document.getElementById('business-password').value;
         const passwordConfirm = document.getElementById('business-password-confirm').value;
         const postcode = document.getElementById('business-postcode').value;
         const address = document.getElementById('business-address').value;
         const addressDetail = document.getElementById('business-address-detail').value;
+        
+        // 필수 입력값 검증
+        if (!businessName || !email || !password || !businessNumber) {
+          alert('기업명, 사업자번호, 이메일, 비밀번호는 필수 입력 항목입니다.');
+          return;
+        }
+        
+        // 이메일 형식 검증
+        if (!validateEmail(email) || !validateEmail(businessEmail)) {
+          alert('유효한 이메일 주소를 입력해주세요.');
+          return;
+        }
+        
+        // 사업자번호 형식 검증
+        if (!validateBusinessNumber(businessNumber)) {
+          alert('사업자번호는 000-00-00000 형식으로 입력해주세요.');
+          return;
+        }
         
         // 비밀번호 확인
         if (password !== passwordConfirm) {
@@ -619,15 +655,20 @@
       registerButton.innerHTML = '처리 중...';
       registerButton.disabled = true;
       
+      console.log('회원가입 요청 URL:', `${scriptURL}?${params.toString()}`);
+      
       // fetch API를 사용하여 데이터 전송
       fetch(`${scriptURL}?${params.toString()}`, {
         method: 'GET',
         mode: 'cors',
         headers: {
           'Accept': 'application/json'
-        }
+        },
+        timeout: 10000 // 10초 타임아웃 설정
       })
       .then(response => {
+        console.log('회원가입 응답 상태:', response.status);
+        
         // 버튼 상태 복원
         registerButton.innerHTML = originalButtonText;
         registerButton.disabled = false;
@@ -643,7 +684,7 @@
         if (data.result === 'success') {
           // 회원가입 성공
           currentUser = {
-            name: data.name,
+            name: data.name || data.businessName,
             email: data.email,
             type: data.type,
             memberNumber: data.memberNumber
@@ -674,6 +715,18 @@
         console.error('회원가입 오류:', error);
         alert('회원가입 중 오류가 발생했습니다. 다시 시도해주세요.');
       });
+    }
+    
+    // 이메일 유효성 검사 함수
+    function validateEmail(email) {
+      const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      return re.test(email);
+    }
+    
+    // 사업자번호 유효성 검사 함수
+    function validateBusinessNumber(businessNumber) {
+      const re = /^\d{3}-\d{2}-\d{5}$/;
+      return re.test(businessNumber);
     }
     
     // 로그아웃 처리
@@ -823,35 +876,44 @@
       orderButton.innerHTML = '처리 중...';
       orderButton.disabled = true;
       
+      console.log('주문 요청 URL:', `${scriptURL}?${params.toString()}`);
+      
       // fetch API를 사용하여 데이터 전송
       fetch(`${scriptURL}?${params.toString()}`, {
         method: 'GET',
         mode: 'cors',
         headers: {
           'Accept': 'application/json'
-        }
+        },
+        timeout: 10000 // 10초 타임아웃 설정
       })
       .then(response => {
+        console.log('주문 응답 상태:', response.status);
+        
         // 버튼 상태 복원
         orderButton.innerHTML = originalButtonText;
         orderButton.disabled = false;
         
         if (response.ok) {
-          alert('주문이 성공적으로 접수되었습니다. 감사합니다!');
-          return response.json();
+          return response.json().then(data => {
+            console.log('주문 응답 데이터:', data);
+            if (data.result === 'success') {
+              alert('주문이 성공적으로 접수되었습니다. 감사합니다!');
+            } else {
+              alert(data.message || '주문 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+            }
+            return data;
+          });
         }
         throw new Error('네트워크 응답이 정상이 아닙니다.');
-      })
-      .then(data => {
-        console.log('성공:', data);
       })
       .catch(error => {
         // 버튼 상태 복원
         orderButton.innerHTML = originalButtonText;
         orderButton.disabled = false;
         
-        console.error('오류:', error);
-        alert('오류가 발생했습니다. 다시 시도해주세요.');
+        console.error('주문 오류:', error);
+        alert('주문 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
       });
     }
     
